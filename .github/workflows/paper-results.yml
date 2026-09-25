@@ -14,10 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      PAPER_SEEDS: "3"
-      PAPER_ITERS: "500"
-      PAPER_LEAKAGE_ITERS: "150"
-      PAPER_OPT_POINTS: "128"
+      PAPER_SEEDS: "50"
+      PAPER_ITERS: "10000"
+      PAPER_LEAKAGE_ITERS: "2500"
+      PAPER_OPT_POINTS: "512"
       PAPER_LEAKAGE_WEIGHT: "0.5"
       PAPER_OUTDIR: "research_outputs"
     steps:
