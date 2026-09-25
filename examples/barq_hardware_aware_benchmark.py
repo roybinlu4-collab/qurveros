@@ -34,6 +34,8 @@ from qurveros.settings import settings
 
 SEEDS = int(os.environ.get("BARQ_BENCHMARK_SEEDS", "5"))
 ITERS = int(os.environ.get("BARQ_BENCHMARK_ITERS", "500"))
+LEAKAGE_ITERS = int(os.environ.get("BARQ_BENCHMARK_LEAKAGE_ITERS", "250"))
+LEAKAGE_WEIGHT = float(os.environ.get("BARQ_BENCHMARK_LEAKAGE_WEIGHT", "0.5"))
 OPT_POINTS = int(os.environ.get("BARQ_BENCHMARK_OPT_POINTS", "512"))
 
 OMEGA_MAX_HW = 2.0 * jnp.pi * 20e6
@@ -119,11 +121,23 @@ def build_curve(seed, variant):
         loss_terms.append([
             compatibility.smoothstep_polar_compatibility_loss, 1.0
         ])
-    if variant == "leakage":
-        loss_terms.append([leakage_loss, 5.0])
-
     curve.prepare_optimization_loss(*loss_terms)
     return curve
+
+
+def prepare_leakage_refinement(curve):
+    """Continue from a compatibility-aware solution with a leakage penalty.
+
+    Continuation preserves the geometric basin found by the cheaper BARQ
+    problem instead of restarting an expensive transmon-aware optimization
+    from a random point.
+    """
+    curve.prepare_optimization_loss(
+        [losses.tantrix_zero_area_loss, 1.0],
+        [losses.max_amp_loss, 1e-2],
+        [compatibility.smoothstep_polar_compatibility_loss, 1.0],
+        [leakage_loss, LEAKAGE_WEIGHT],
+    )
 
 
 def validate(curve, variant, seed, elapsed):
@@ -240,18 +254,49 @@ def main():
     variants = ("baseline", "compatibility", "leakage")
 
     for seed in range(SEEDS):
-        for variant in variants:
-            curve = build_curve(seed, variant)
-            optimizer = make_optimizer(curve.params)
+        # Baseline and compatibility-aware optimizers start from the exact same
+        # BARQ seed.  The leakage-aware optimizer then continues from the
+        # compatibility solution, so its reported wall time includes both
+        # stages and represents the full end-to-end cost.
+        baseline_curve = build_curve(seed, "baseline")
+        baseline_optimizer = make_optimizer(baseline_curve.params)
+        start = time.perf_counter()
+        baseline_curve.optimize(baseline_optimizer, max_iter=ITERS)
+        jax.block_until_ready(baseline_curve.opt_loss(baseline_curve.params))
+        baseline_elapsed = time.perf_counter() - start
+        baseline_row = validate(
+            baseline_curve, "baseline", seed, baseline_elapsed
+        )
+        rows.append(baseline_row)
+        print(json.dumps(baseline_row, sort_keys=True))
 
-            start = time.perf_counter()
-            curve.optimize(optimizer, max_iter=ITERS)
-            jax.block_until_ready(curve.opt_loss(curve.params))
-            elapsed = time.perf_counter() - start
+        compat_curve = build_curve(seed, "compatibility")
+        compat_optimizer = make_optimizer(compat_curve.params)
+        start = time.perf_counter()
+        compat_curve.optimize(compat_optimizer, max_iter=ITERS)
+        jax.block_until_ready(compat_curve.opt_loss(compat_curve.params))
+        compat_elapsed = time.perf_counter() - start
+        compat_row = validate(
+            compat_curve, "compatibility", seed, compat_elapsed
+        )
+        rows.append(compat_row)
+        print(json.dumps(compat_row, sort_keys=True))
 
-            row = validate(curve, variant, seed, elapsed)
-            rows.append(row)
-            print(json.dumps(row, sort_keys=True))
+        # Leakage-aware continuation.
+        prepare_leakage_refinement(compat_curve)
+        leakage_optimizer = make_optimizer(compat_curve.params)
+        start = time.perf_counter()
+        compat_curve.optimize(leakage_optimizer, max_iter=LEAKAGE_ITERS)
+        jax.block_until_ready(compat_curve.opt_loss(compat_curve.params))
+        refinement_elapsed = time.perf_counter() - start
+        leakage_row = validate(
+            compat_curve,
+            "leakage",
+            seed,
+            compat_elapsed + refinement_elapsed,
+        )
+        rows.append(leakage_row)
+        print(json.dumps(leakage_row, sort_keys=True))
 
     with open("barq_hardware_aware_benchmark.csv", "w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=rows[0].keys())
