@@ -128,6 +128,8 @@ def figure2(df):
         )
         ax.set_xticks(x, labels)
         ax.set_ylabel(ylabel)
+        if metric == "gate_time_ns":
+            ax.set_yscale("log")
         ax.grid(alpha=0.2)
 
     ax = axes.flat[3]
@@ -230,7 +232,10 @@ def figure3(compat):
 def _transmon_history(curve, initial_level=0):
     control = _optimized_control(curve)
     sampled = transmon.resample_control(control, CONTROL_N)
-    phase_slew = jnp.gradient(sampled["phi"], sampled["times"])
+    phase_slew = sampled.get(
+        "phase_slew",
+        jnp.gradient(sampled["phi"], sampled["times"]),
+    )
     gate_time = jax_controltools.minimum_gate_time(
         sampled["omega"], sampled["delta"], phase_slew,
         omega_max_hw=OMEGA_MAX_HW,
@@ -268,6 +273,15 @@ def figure4(compat, leakage):
     axes[2].set_title(r"Leakage population $P_2$")
     axes[2].set_ylabel(r"$P_{\rm leak}$")
     axes[2].legend()
+    axes[2].text(
+        0.03, 0.05,
+        "Compat: peak={:.2e}, final={:.2e}\nContinuation: peak={:.2e}, final={:.2e}".format(
+            pc[:, 2].max(), pc[-1, 2], pl[:, 2].max(), pl[-1, 2]
+        ),
+        transform=axes[2].transAxes,
+        fontsize=8,
+        va="bottom",
+    )
     for ax in axes:
         ax.set_xlabel(r"Normalized time $u$")
         ax.grid(alpha=0.2)
@@ -323,7 +337,8 @@ def figure5(df):
         ax.plot(frontier["gate_time_ns"], frontier["cfi"], linewidth=1.2)
     cb = fig.colorbar(sc_ref, ax=ax)
     cb.set_label(r"$-\log_{10} P_{\rm leak}(T)$")
-    ax.set_xlabel(r"Hardware-box $T_{\min}$ (ns)")
+    ax.set_xscale("log")
+    ax.set_xlabel(r"Hardware-box $T_{\min}$ (ns, log scale)")
     ax.set_ylabel("CFI")
     ax.set_title("Figure 5. Matched-seed Pareto plane")
     ax.legend()
