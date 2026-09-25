@@ -11,7 +11,6 @@ import jax
 import jax.numpy as jnp
 
 from qurveros import frametools
-from qurveros.settings import settings
 
 
 def cumulative_trapezoid(y, x):
