@@ -213,3 +213,125 @@ def make_transmon_leakage_loss(
         )
 
     return jax.jit(loss)
+
+
+@functools.partial(jax.jit, static_argnames=("levels",))
+def propagate_transmon_unitary(times, omega, phi, delta, gate_time,
+                               anharmonicity, levels=3):
+    """Propagate the full truncated transmon unitary."""
+    dt_u = jnp.diff(times)
+    om_mid = 0.5 * (omega[:-1] + omega[1:]) / gate_time
+    de_mid = 0.5 * (delta[:-1] + delta[1:]) / gate_time
+    ph_mid = jnp.angle(
+        jnp.exp(1j * phi[:-1]) + jnp.exp(1j * phi[1:])
+    )
+
+    identity = jnp.eye(levels, dtype=jnp.complex128)
+
+    def step(unitary_total, data):
+        du, om, ph, de = data
+        hamiltonian = transmon_hamiltonian(
+            om, ph, de, anharmonicity, levels=levels
+        )
+        unitary_step = jsp_linalg.expm(
+            -1j * hamiltonian * gate_time * du
+        )
+        next_unitary = unitary_step @ unitary_total
+        return next_unitary, None
+
+    unitary, _ = jax.lax.scan(
+        step,
+        identity,
+        (dt_u, om_mid, ph_mid, de_mid),
+    )
+    return unitary
+
+
+@jax.jit
+def average_gate_leakage(unitary):
+    """Average final leakage over computational basis inputs |0> and |1>."""
+    computational_block = unitary[:2, :2]
+    survival = jnp.sum(jnp.abs(computational_block)**2) / 2.0
+    return jnp.maximum(0.0, 1.0 - survival)
+
+
+def gate_leakage_metrics_from_frenet(
+        frenet_dict,
+        anharmonicity,
+        omega_max_hw,
+        delta_max_hw=jnp.inf,
+        phase_slew_max_hw=jnp.inf,
+        levels=3,
+        n_steps=256,
+        w_detuning=1.0,
+        w_phase=1.0,
+        w_slew=0.0,
+        preserve_barq_gate=True,
+):
+    """Evaluate gate-level leakage for a BARQ Frenet dictionary."""
+    control = jax_controltools.hardware_gauge_control(
+        frenet_dict,
+        w_detuning=w_detuning,
+        w_phase=w_phase,
+        w_slew=w_slew,
+        preserve_barq_gate=preserve_barq_gate,
+    )
+    sampled = resample_control(control, n_steps)
+
+    phase_slew = jnp.gradient(sampled["phi"], sampled["times"])
+    gate_time = jax_controltools.minimum_gate_time(
+        sampled["omega"],
+        sampled["delta"],
+        phase_slew,
+        omega_max_hw=omega_max_hw,
+        delta_max_hw=delta_max_hw,
+        phase_slew_max_hw=phase_slew_max_hw,
+    )
+
+    unitary = propagate_transmon_unitary(
+        sampled["times"],
+        sampled["omega"],
+        sampled["phi"],
+        sampled["delta"],
+        gate_time,
+        anharmonicity,
+        levels=levels,
+    )
+
+    return {
+        "gate_time": gate_time,
+        "leakage": average_gate_leakage(unitary),
+        "unitary": unitary,
+    }
+
+
+def make_transmon_gate_leakage_loss(
+        anharmonicity,
+        omega_max_hw,
+        delta_max_hw=jnp.inf,
+        phase_slew_max_hw=jnp.inf,
+        levels=3,
+        n_steps=256,
+        w_detuning=1.0,
+        w_phase=1.0,
+        w_slew=0.0,
+        preserve_barq_gate=True,
+):
+    """Return an average gate-leakage objective for BARQ optimization."""
+    def loss(frenet_dict):
+        metrics = gate_leakage_metrics_from_frenet(
+            frenet_dict,
+            anharmonicity=anharmonicity,
+            omega_max_hw=omega_max_hw,
+            delta_max_hw=delta_max_hw,
+            phase_slew_max_hw=phase_slew_max_hw,
+            levels=levels,
+            n_steps=n_steps,
+            w_detuning=w_detuning,
+            w_phase=w_phase,
+            w_slew=w_slew,
+            preserve_barq_gate=preserve_barq_gate,
+        )
+        return metrics["leakage"]
+
+    return jax.jit(loss)
