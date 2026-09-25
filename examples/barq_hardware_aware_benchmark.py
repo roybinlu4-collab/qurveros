@@ -54,14 +54,13 @@ compat_loss = compatibility.make_population_endpoint_loss(
     pole_epsilon=1e-4,
 )
 
-leakage_loss = transmon.make_transmon_leakage_loss(
+leakage_loss = transmon.make_transmon_gate_leakage_loss(
     anharmonicity=ANHARMONICITY,
     omega_max_hw=OMEGA_MAX_HW,
     delta_max_hw=DELTA_MAX_HW,
     phase_slew_max_hw=PHASE_SLEW_MAX_HW,
     levels=3,
     n_steps=64,
-    max_leakage_weight=10.0,
     w_detuning=GAUGE_W_DETUNING,
     w_phase=GAUGE_W_PHASE,
     w_slew=GAUGE_W_SLEW,
@@ -161,7 +160,20 @@ def validate(curve, variant, seed, elapsed):
         phase_slew_max_hw=PHASE_SLEW_MAX_HW,
     ))
 
-    tm = transmon.transmon_metrics_from_frenet(
+    tm_gate = transmon.gate_leakage_metrics_from_frenet(
+        frenet,
+        anharmonicity=ANHARMONICITY,
+        omega_max_hw=OMEGA_MAX_HW,
+        delta_max_hw=DELTA_MAX_HW,
+        phase_slew_max_hw=PHASE_SLEW_MAX_HW,
+        levels=3,
+        n_steps=256,
+        w_detuning=GAUGE_W_DETUNING,
+        w_phase=GAUGE_W_PHASE,
+        w_slew=GAUGE_W_SLEW,
+        preserve_barq_gate=True,
+    )
+    tm_state = transmon.transmon_metrics_from_frenet(
         frenet,
         anharmonicity=ANHARMONICITY,
         omega_max_hw=OMEGA_MAX_HW,
@@ -175,8 +187,9 @@ def validate(curve, variant, seed, elapsed):
         preserve_barq_gate=True,
     )
 
-    leakage = float(tm["leakage"])
-    max_leakage = float(tm["max_leakage"])
+    leakage = float(tm_gate["leakage"])
+    state0_leakage = float(tm_state["leakage"])
+    max_leakage = float(tm_state["max_state0_leakage"])
 
     geometric_success = bool(
         jnp.isfinite(cfi)
@@ -208,7 +221,8 @@ def validate(curve, variant, seed, elapsed):
         "cfi": cfi,
         "gate_time_ns": gate_time * 1e9,
         "leakage": leakage,
-        "max_leakage": max_leakage,
+        "state0_leakage": state0_leakage,
+        "max_state0_leakage": max_leakage,
         "compatibility_endpoint_loss": endpoint,
         "compatibility_barrier": compatibility_barrier,
         "tantrix_area_sq": tan_area_sq,
@@ -269,7 +283,7 @@ def main():
                 row["leakage"] for row in subset
             ) / denom,
             "mean_all_max_leakage": sum(
-                row["max_leakage"] for row in subset
+                row["max_state0_leakage"] for row in subset
             ) / denom,
             "mean_success_cfi": (
                 sum(row["cfi"] for row in good) / len(good)
@@ -284,7 +298,7 @@ def main():
                 if good else None
             ),
             "mean_success_max_leakage": (
-                sum(row["max_leakage"] for row in good) / len(good)
+                sum(row["max_state0_leakage"] for row in good) / len(good)
                 if good else None
             ),
         }
