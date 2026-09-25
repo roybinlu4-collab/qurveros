@@ -19,6 +19,7 @@ import time
 import jax
 import jax.numpy as jnp
 import optax
+import numpy as np
 import qutip
 
 from qurveros import barqtools
@@ -249,6 +250,61 @@ def validate(curve, variant, seed, elapsed):
     }
 
 
+
+def save_representative_snapshot(curve, variant):
+    """Save one fully validated seed for paper-level waveform visualizations."""
+    curve.evaluate_frenet_dict(n_points=4096)
+    frenet = curve.get_frenet_dict()
+    control = jax_controltools.hardware_gauge_control(
+        frenet,
+        w_detuning=GAUGE_W_DETUNING,
+        w_phase=GAUGE_W_PHASE,
+        w_slew=GAUGE_W_SLEW,
+        preserve_barq_gate=True,
+    )
+
+    sampled = transmon.resample_control(control, 1024)
+    phase_slew = jnp.gradient(sampled["phi"], sampled["times"])
+    gate_time = jax_controltools.minimum_gate_time(
+        sampled["omega"],
+        sampled["delta"],
+        phase_slew,
+        omega_max_hw=OMEGA_MAX_HW,
+        delta_max_hw=DELTA_MAX_HW,
+        phase_slew_max_hw=PHASE_SLEW_MAX_HW,
+    )
+
+    state0 = jnp.zeros((3,), dtype=jnp.complex128).at[0].set(1.0 + 0.0j)
+    _, history = transmon.propagate_transmon(
+        sampled["times"],
+        sampled["omega"],
+        sampled["phi"],
+        sampled["delta"],
+        gate_time,
+        ANHARMONICITY,
+        state0,
+        levels=3,
+    )
+
+    payload = {
+        "u": np.asarray(sampled["times"]),
+        "omega_hat": np.asarray(sampled["omega"]),
+        "delta_hat": np.asarray(sampled["delta"]),
+        "phase_slew_hat": np.asarray(phase_slew),
+        "phi": np.asarray(sampled["phi"]),
+        "gate_time_s": np.asarray(gate_time),
+        "p0": np.asarray(jnp.abs(history[:, 0])**2),
+        "p1": np.asarray(jnp.abs(history[:, 1])**2),
+        "p2": np.asarray(jnp.abs(history[:, 2])**2),
+        "curve": np.asarray(frenet["curve"]),
+        "tangent": np.asarray(frenet["frame"][:, 0, :]),
+        "curvature": np.asarray(frenet["curvature"]),
+        "torsion": np.asarray(frenet["torsion"]),
+        "frenet_x": np.asarray(frenet["x_values"]),
+        "frenet_speed": np.asarray(frenet["speed"]),
+    }
+    np.savez(f"representative_{variant}.npz", **payload)
+
 def main():
     rows = []
     variants = ("baseline", "compatibility", "leakage")
@@ -269,6 +325,8 @@ def main():
         )
         rows.append(baseline_row)
         print(json.dumps(baseline_row, sort_keys=True))
+        if seed == 0:
+            save_representative_snapshot(baseline_curve, "baseline")
 
         compat_curve = build_curve(seed, "compatibility")
         compat_optimizer = make_optimizer(compat_curve.params)
@@ -281,6 +339,8 @@ def main():
         )
         rows.append(compat_row)
         print(json.dumps(compat_row, sort_keys=True))
+        if seed == 0:
+            save_representative_snapshot(compat_curve, "compatibility")
 
         # Leakage-aware continuation.
         prepare_leakage_refinement(compat_curve)
@@ -297,6 +357,8 @@ def main():
         )
         rows.append(leakage_row)
         print(json.dumps(leakage_row, sort_keys=True))
+        if seed == 0:
+            save_representative_snapshot(compat_curve, "leakage")
 
     with open("barq_hardware_aware_benchmark.csv", "w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=rows[0].keys())
