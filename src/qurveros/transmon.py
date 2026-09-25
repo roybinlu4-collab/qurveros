@@ -286,7 +286,10 @@ def gate_leakage_metrics_from_frenet(
     )
     sampled = resample_control(control, n_steps)
 
-    phase_slew = jnp.gradient(sampled["phi"], sampled["times"])
+    phase_slew = sampled.get(
+        "phase_slew",
+        jnp.gradient(sampled["phi"], sampled["times"]),
+    )
     gate_time = jax_controltools.minimum_gate_time(
         sampled["omega"],
         sampled["delta"],
