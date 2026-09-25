@@ -31,6 +31,24 @@ class TransmonTestCase(unittest.TestCase):
         leakage = transmon.computational_leakage(final_state, levels=3)
         self.assertTrue(jnp.allclose(leakage, 0.0, atol=1e-12))
 
+
+    def test_gate_level_zero_drive_has_zero_leakage(self):
+        times = jnp.linspace(0.0, 1.0, 33)
+        zeros = jnp.zeros_like(times)
+
+        unitary = transmon.propagate_transmon_unitary(
+            times,
+            zeros,
+            zeros,
+            zeros,
+            gate_time=20e-9,
+            anharmonicity=-2*jnp.pi*300e6,
+            levels=3,
+        )
+
+        leakage = transmon.average_gate_leakage(unitary)
+        self.assertTrue(jnp.allclose(leakage, 0.0, atol=1e-12))
+
     def test_two_level_pi_pulse(self):
         times = jnp.linspace(0.0, 1.0, 129)
         omega = jnp.pi * jnp.ones_like(times)
