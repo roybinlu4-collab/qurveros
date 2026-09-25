@@ -1,0 +1,54 @@
+name: Hardware-aware BARQ extension CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install package
+        run: python -m pip install -e .
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -p "test_*.py"
+
+  benchmark:
+    needs: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      BARQ_BENCHMARK_SEEDS: "50"
+      BARQ_BENCHMARK_ITERS: "10000"
+      BARQ_BENCHMARK_OPT_POINTS: "512"
+      BARQ_BENCHMARK_LEAKAGE_ITERS: "2500"
+      BARQ_BENCHMARK_LEAKAGE_WEIGHT: "0.5"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install package
+        run: python -m pip install -e .
+      - name: Run 50-seed matched benchmark
+        run: python examples/barq_hardware_aware_benchmark.py
+      - name: Build paper figures
+        run: python examples/barq_paper_figures.py
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardware-aware-barq-benchmark
+          path: |
+            barq_hardware_aware_benchmark.csv
+            barq_hardware_aware_summary.json
+            paper_figures/*.png
+            paper_figures/*.pdf
+            paper_figures/*.csv
+            paper_figures/*.npz

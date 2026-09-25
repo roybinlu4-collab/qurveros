@@ -325,18 +325,21 @@ class BarqCurve(OptimizableSpaceCurve):
 
         return super().initialize_parameters(params)
 
-    def evaluate_control_dict(self, n_points=None):
+    def evaluate_control_dict(self, control_mode='TTC', n_points=None):
 
         """
-        Evaluates the control dictionary using the TTC choice.
+        Evaluates the control dictionary for a BARQ curve.
+
+        The default control mode remains TTC for backward compatibility.
+        Other SpaceCurve control modes can be selected explicitly.
         """
 
         # If the pgf_mod fixes some parameters, they will not be automatically
         # updated upon execution. The corner case is when the barq_angle
-        # is fixed, and the TTC used. That case must be handled with an
+        # is fixed, and TTC is used. That case must be handled with an
         # additional update or by masking the respective gradient update.
 
-        super().evaluate_control_dict('TTC', n_points)
+        super().evaluate_control_dict(control_mode, n_points)
 
     def get_bezier_control_points(self):
 
