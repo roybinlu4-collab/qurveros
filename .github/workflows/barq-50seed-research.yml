@@ -13,7 +13,7 @@ on:
 jobs:
   research:
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 90
     env:
       JAX_ENABLE_X64: "true"
       BARQ_BENCHMARK_SEEDS: "50"
