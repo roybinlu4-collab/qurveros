@@ -286,6 +286,10 @@ def save_representative_snapshot(curve, variant):
         levels=3,
     )
 
+    curve.evaluate_control_dict(control_mode="TTC", n_points=1024)
+    ttc = curve.get_control_dict()
+    ttc_phase_slew = np.gradient(ttc["phi"], ttc["times"])
+
     payload = {
         "u": np.asarray(sampled["times"]),
         "omega_hat": np.asarray(sampled["omega"]),
@@ -296,6 +300,11 @@ def save_representative_snapshot(curve, variant):
         "p0": np.asarray(jnp.abs(history[:, 0])**2),
         "p1": np.asarray(jnp.abs(history[:, 1])**2),
         "p2": np.asarray(jnp.abs(history[:, 2])**2),
+        "ttc_u": np.asarray(ttc["times"]),
+        "ttc_omega_hat": np.asarray(ttc["omega"]),
+        "ttc_delta_hat": np.asarray(ttc["delta"]),
+        "ttc_phase_slew_hat": np.asarray(ttc_phase_slew),
+        "ttc_phi": np.asarray(ttc["phi"]),
         "curve": np.asarray(frenet["curve"]),
         "tangent": np.asarray(frenet["frame"][:, 0, :]),
         "curvature": np.asarray(frenet["curvature"]),
