@@ -114,10 +114,14 @@ means TTC control. An explicit mode can now be supplied, and all new
 hardware-aware behavior is opt-in.
 
 
-## 7. Reproducible 5-seed pilot result
+## 7. Reproducible 5-seed continuation benchmark
 
-A 10,000-step, 512-point pilot was run with identical seeds on GitHub Actions
-(run 36122394505). The common hardware box used
+A 10,000-step, 512-point benchmark was run with identical seeds on GitHub
+Actions run 36155673396.  The leakage-aware optimizer uses a continuation
+strategy: it first converges the compatibility-aware BARQ problem and then
+performs 2,500 additional refinement steps with a leakage weight of 0.5.
+
+The common hardware box was
 
 - Omega_max / 2pi = 20 MHz,
 - Delta_max / 2pi = 20 MHz,
@@ -129,25 +133,28 @@ Common geometric success was defined by closed-curve residual squared below
 also required a smooth-polar compatibility barrier below 1e-2. Leakage-aware
 runs additionally required maximum transient leakage below 5e-3.
 
-| optimizer | task success | geometric success | mean CFI | mean hardware-box gate time | mean final leakage | mean max transient leakage | mean optimize time |
+| optimizer | task success | geometric success | mean CFI | mean hardware-box gate time | mean final gate leakage | mean max transient leakage | mean end-to-end optimize time |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| baseline BARQ | 5/5 | 5/5 | 4.004e-2 | 889.0 ns | 1.786e-8 | 2.495e-5 | 13.28 s |
-| + compatibility | 5/5 | 5/5 | 3.735e-2 | 382.3 ns | 2.366e-9 | 4.698e-5 | 13.94 s |
-| + compatibility + leakage | 2/5 | 2/5 | 2.745e-2 (all runs) | 637.5 ns (all runs) | 2.111e-6 (all runs) | 5.553e-4 (all runs) | 44.20 s |
+| baseline BARQ | 5/5 | 5/5 | 4.002e-2 | 888.9 ns | 1.173e-8 | 2.501e-5 | 10.19 s |
+| + compatibility | 5/5 | 5/5 | 3.733e-2 | 382.4 ns | 1.717e-9 | 4.714e-5 | 10.44 s |
+| + compatibility + leakage continuation | 5/5 | 5/5 | 3.761e-2 | 340.7 ns | 1.085e-12 | 6.463e-5 | 20.51 s |
 
-For the two leakage-aware runs that met all success criteria, the mean CFI was
-2.826e-2, the mean hardware-box gate time was 489.0 ns, and the mean final
-leakage was 5.327e-11.
+Relative to baseline, compatibility-aware BARQ reduced mean CFI by 6.73% and
+the hardware-box gate-time lower bound by 56.98%, while increasing optimization
+time by only 2.49%.
 
-The strongest pilot observation is not a universal leakage advantage. It is
-that the compatibility barrier reduced its mean value from 3.975e-1 to
-2.369e-4 while retaining 5/5 geometric convergence. Under the selected common
-hardware box this coincided with a 57.0% lower mean hardware-limited gate time
-and a 6.73% lower mean CFI than baseline, with only about 5% additional
-optimization time.
+The continuation stage retained 5/5 geometric and compatibility convergence.
+Relative to the compatibility-only solution, it reduced the mean gate-time
+lower bound by another 10.90% and the final gate leakage by a factor of about
+1.58e3, at the cost of a 0.75% increase in CFI and roughly doubling end-to-end
+optimization time.  The maximum transient leakage increased modestly but
+remained well below the 5e-3 benchmark threshold for every seed.
 
-The leakage-aware objective is not yet tuned: it reduced CFI in the converged
-subset but only 2/5 seeds met the common geometric constraint. This is a useful
-negative result and indicates that leakage should be introduced by continuation
-or an augmented-Lagrangian/Pareto strategy rather than by a single large
-weighted penalty.
+This result replaces the earlier single-shot leakage-penalty pilot, which lost
+geometric convergence for three of five seeds.  It supports continuation as the
+default leakage-aware strategy for this prototype, but the five-seed benchmark
+is still an algorithm/API validation rather than a statistically final hardware
+performance claim.
+
+Raw CSV/JSON results are stored as the GitHub Actions artifact
+hardware-aware-barq-benchmark from run 36155673396.
