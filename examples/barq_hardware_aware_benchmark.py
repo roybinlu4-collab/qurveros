@@ -11,7 +11,9 @@ Defaults are CI-friendly pilot values and can be overridden with environment
 variables.
 """
 
+import contextlib
 import csv
+import io
 import json
 import os
 import time
@@ -69,6 +71,13 @@ leakage_loss = transmon.make_transmon_gate_leakage_loss(
     w_slew=GAUGE_W_SLEW,
     preserve_barq_gate=True,
 )
+
+
+def run_optimize_silent(curve, optimizer, max_iter):
+    """Run qurveros optimization without per-iteration progress-log overhead."""
+    with contextlib.redirect_stdout(io.StringIO()):
+        curve.optimize(optimizer, max_iter=max_iter)
+    jax.block_until_ready(curve.opt_loss(curve.params))
 
 
 def make_optimizer(params):
@@ -326,8 +335,7 @@ def main():
         baseline_curve = build_curve(seed, "baseline")
         baseline_optimizer = make_optimizer(baseline_curve.params)
         start = time.perf_counter()
-        baseline_curve.optimize(baseline_optimizer, max_iter=ITERS)
-        jax.block_until_ready(baseline_curve.opt_loss(baseline_curve.params))
+        run_optimize_silent(baseline_curve, baseline_optimizer, ITERS)
         baseline_elapsed = time.perf_counter() - start
         baseline_row = validate(
             baseline_curve, "baseline", seed, baseline_elapsed
@@ -340,8 +348,7 @@ def main():
         compat_curve = build_curve(seed, "compatibility")
         compat_optimizer = make_optimizer(compat_curve.params)
         start = time.perf_counter()
-        compat_curve.optimize(compat_optimizer, max_iter=ITERS)
-        jax.block_until_ready(compat_curve.opt_loss(compat_curve.params))
+        run_optimize_silent(compat_curve, compat_optimizer, ITERS)
         compat_elapsed = time.perf_counter() - start
         compat_row = validate(
             compat_curve, "compatibility", seed, compat_elapsed
@@ -355,8 +362,7 @@ def main():
         prepare_leakage_refinement(compat_curve)
         leakage_optimizer = make_optimizer(compat_curve.params)
         start = time.perf_counter()
-        compat_curve.optimize(leakage_optimizer, max_iter=LEAKAGE_ITERS)
-        jax.block_until_ready(compat_curve.opt_loss(compat_curve.params))
+        run_optimize_silent(compat_curve, leakage_optimizer, LEAKAGE_ITERS)
         refinement_elapsed = time.perf_counter() - start
         leakage_row = validate(
             compat_curve,
