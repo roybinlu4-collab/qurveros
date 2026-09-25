@@ -100,17 +100,22 @@ def resample_control(control, n_steps):
     omega = jnp.interp(times_new, times, control["omega"])
     delta = jnp.interp(times_new, times, control["delta"])
 
-    phase_complex = jnp.exp(1j * control["phi"])
-    phase_real = jnp.interp(times_new, times, jnp.real(phase_complex))
-    phase_imag = jnp.interp(times_new, times, jnp.imag(phase_complex))
-    phi = jnp.angle(phase_real + 1j * phase_imag)
+    # Keep the accumulated phase continuous.  Interpolating exp(i*phi) and
+    # taking angle() re-wraps the phase into [-pi, pi], which creates artificial
+    # 2*pi jumps when differentiating it to estimate phase slew.
+    phi = jnp.interp(times_new, times, control["phi"])
 
-    return {
+    out = {
         "times": times_new,
         "omega": omega,
         "phi": phi,
         "delta": delta,
     }
+    if "phase_slew" in control:
+        out["phase_slew"] = jnp.interp(
+            times_new, times, control["phase_slew"]
+        )
+    return out
 
 
 def transmon_metrics_from_frenet(
@@ -138,7 +143,10 @@ def transmon_metrics_from_frenet(
     )
     sampled = resample_control(control, n_steps)
 
-    phase_slew = jnp.gradient(sampled["phi"], sampled["times"])
+    phase_slew = sampled.get(
+        "phase_slew",
+        jnp.gradient(sampled["phi"], sampled["times"]),
+    )
     gate_time = jax_controltools.minimum_gate_time(
         sampled["omega"],
         sampled["delta"],
