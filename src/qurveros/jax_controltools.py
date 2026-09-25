@@ -10,6 +10,7 @@ back to BARQ/Bezier parameters.
 import jax
 import jax.numpy as jnp
 
+from qurveros import frametools
 from qurveros.settings import settings
 
 
@@ -175,30 +176,21 @@ def solve_hardware_gauge(times, torsion_hat, w_detuning=1.0,
 
 
 def barq_target_phase_integral(frenet_dict):
-    """Choose the 2pi-equivalent phase branch closest to total torsion."""
+    """Return the terminal phase integral of the canonical TTC realization.
+
+    This reuses qurveros' own total-torsion-compensation branch choice rather
+    than re-detecting frame sign flips.  Preserving this integral therefore
+    preserves the same effective BARQ gate (including the singular-frame
+    convention) while allowing the time-dependent gauge to change.
+    """
     params = frenet_dict["params"]
     if "pgf_params" not in params:
         raise ValueError("BARQ phase target requires pgf_params.")
 
     angle = jnp.ravel(jnp.asarray(params["pgf_params"]["barq_angle"]))[0]
-
-    B = frenet_dict["frame"][:, 2, :]
-    products = jnp.sum(B[1:] * B[:-1], axis=1)
-    n_flips = jnp.sum(products < -0.9)
-
-    x = frenet_dict["x_values"]
-    total_torsion = jnp.trapezoid(
-        frenet_dict["speed"] * frenet_dict["torsion"], x
-    )
-
-    base = angle - jnp.pi * n_flips
-    k_range = jnp.arange(
-        -settings.options["ANGLE_K_MAX"],
-        settings.options["ANGLE_K_MAX"] + 1,
-    )
-    candidates = base + 2.0 * jnp.pi * k_range
-    idx = jnp.argmin((candidates - total_torsion)**2)
-    return candidates[idx]
+    total_torsion = frametools.calculate_total_torsion(frenet_dict)
+    ttc_detuning = frametools.calculate_ttc_detuning(frenet_dict, angle)
+    return total_torsion + ttc_detuning
 
 
 def hardware_gauge_control(frenet_dict, w_detuning=1.0, w_phase=1.0,
