@@ -97,6 +97,26 @@ class TransmonTestCase(unittest.TestCase):
         self.assertTrue(jnp.isfinite(value))
         self.assertTrue(jnp.isfinite(grad))
 
+    def test_resample_preserves_continuous_phase_slew(self):
+        times = jnp.linspace(0.0, 1.0, 65)
+        # Accumulated phase crosses several 2*pi branches.
+        phi = 5.0 * jnp.pi * times
+        phase_slew = 5.0 * jnp.pi * jnp.ones_like(times)
+        control = {
+            "times": times,
+            "omega": jnp.ones_like(times),
+            "delta": jnp.zeros_like(times),
+            "phi": phi,
+            "phase_slew": phase_slew,
+        }
+
+        sampled = transmon.resample_control(control, 257)
+
+        self.assertTrue(jnp.all(jnp.diff(sampled["phi"]) >= 0.0))
+        self.assertTrue(
+            jnp.allclose(sampled["phase_slew"], 5.0*jnp.pi, atol=1e-10)
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
