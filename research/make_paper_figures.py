@@ -159,12 +159,19 @@ def save_figure(fig, stem):
 
 def common_success_dataframe(df, statistics):
     seeds = statistics["paired"]["common_successful_seeds"]
-    return df[df["seed"].isin(seeds)].copy(), seeds
+    if seeds:
+        return df[df["seed"].isin(seeds)].copy(), seeds, True
+    # Smoke tests and deliberately under-converged runs may have no seed for
+    # which all three variants satisfy the final success threshold.  Fall back
+    # to all matched seeds for plotting only; the success-rate panel still
+    # reports the actual thresholds.
+    seeds = sorted(df["seed"].unique().tolist())
+    return df[df["seed"].isin(seeds)].copy(), seeds, False
 
 
 def figure2_matched_seed_benchmark(df, statistics):
     """Figure 2: paired 50-seed statistics."""
-    plot_df, seeds = common_success_dataframe(df, statistics)
+    plot_df, seeds, all_success = common_success_dataframe(df, statistics)
     order = ["baseline", "compatibility", "leakage"]
     labels = ["Baseline", "+ Compatibility", "+ Leakage\ncontinuation"]
     x = np.arange(3)
@@ -196,17 +203,20 @@ def figure2_matched_seed_benchmark(df, statistics):
         info = statistics["variants"][variant]
         success_rates.append(100 * info["success_rate"])
         lo, hi = info["success_rate_ci95"]
-        lows.append(100 * (info["success_rate"] - lo))
-        highs.append(100 * (hi - info["success_rate"]))
+        lows.append(max(0.0, 100 * (info["success_rate"] - lo)))
+        highs.append(max(0.0, 100 * (hi - info["success_rate"])))
     ax.bar(x, success_rates, yerr=[lows, highs], capsize=3)
     ax.set_xticks(x, labels)
     ax.set_ylim(0, 105)
     ax.set_ylabel("Success rate (%)")
     ax.grid(axis="y", alpha=0.2)
 
-    fig.suptitle(
-        f"Matched-seed BARQ benchmark (common successful seeds: n={len(seeds)})"
+    subset_label = (
+        f"common successful seeds: n={len(seeds)}"
+        if all_success
+        else f"all matched seeds shown; common-success n=0 (smoke mode), n={len(seeds)}"
     )
+    fig.suptitle(f"Matched-seed BARQ benchmark ({subset_label})")
     save_figure(fig, "Figure2_matched_seed_benchmark")
 
 
