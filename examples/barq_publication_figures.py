@@ -35,6 +35,7 @@ from barq_hardware_aware_benchmark import (
     build_curve,
     make_optimizer,
     prepare_leakage_refinement,
+    run_optimize_silent,
 )
 from qurveros import jax_controltools
 from qurveros import transmon
@@ -80,19 +81,17 @@ def choose_representative_seed(df):
 
 def optimize_representative(seed):
     baseline = build_curve(seed, "baseline")
-    baseline.optimize(make_optimizer(baseline.params), max_iter=ITERS)
-    jax.block_until_ready(baseline.opt_loss(baseline.params))
+    run_optimize_silent(baseline, make_optimizer(baseline.params), ITERS)
 
     compat = build_curve(seed, "compatibility")
-    compat.optimize(make_optimizer(compat.params), max_iter=ITERS)
-    jax.block_until_ready(compat.opt_loss(compat.params))
+    run_optimize_silent(compat, make_optimizer(compat.params), ITERS)
 
     leakage = build_curve(seed, "compatibility")
-    leakage.optimize(make_optimizer(leakage.params), max_iter=ITERS)
-    jax.block_until_ready(leakage.opt_loss(leakage.params))
+    run_optimize_silent(leakage, make_optimizer(leakage.params), ITERS)
     prepare_leakage_refinement(leakage)
-    leakage.optimize(make_optimizer(leakage.params), max_iter=LEAKAGE_ITERS)
-    jax.block_until_ready(leakage.opt_loss(leakage.params))
+    run_optimize_silent(
+        leakage, make_optimizer(leakage.params), LEAKAGE_ITERS
+    )
 
     for curve in (baseline, compat, leakage):
         curve.evaluate_frenet_dict(n_points=2048)
