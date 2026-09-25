@@ -189,7 +189,7 @@ def validate(curve, variant, seed, elapsed):
 
     leakage = float(tm_gate["leakage"])
     state0_leakage = float(tm_state["leakage"])
-    max_leakage = float(tm_state["max_state0_leakage"])
+    max_leakage = float(tm_state["max_leakage"])
 
     geometric_success = bool(
         jnp.isfinite(cfi)
