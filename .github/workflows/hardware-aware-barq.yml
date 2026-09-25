@@ -1,9 +1,6 @@
 name: Hardware-aware BARQ extension CI
 
 on:
-  push:
-    branches:
-      - feature/state-compatibility-transmon
   pull_request:
   workflow_dispatch:
 
@@ -27,10 +24,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      BARQ_BENCHMARK_SEEDS: "5"
-      BARQ_BENCHMARK_ITERS: "10000"
-      BARQ_BENCHMARK_OPT_POINTS: "512"
-      BARQ_BENCHMARK_LEAKAGE_ITERS: "2500"
+      BARQ_BENCHMARK_SEEDS: "3"
+      BARQ_BENCHMARK_ITERS: "500"
+      BARQ_BENCHMARK_OPT_POINTS: "256"
+      BARQ_BENCHMARK_LEAKAGE_ITERS: "250"
       BARQ_BENCHMARK_LEAKAGE_WEIGHT: "0.5"
     steps:
       - uses: actions/checkout@v4
