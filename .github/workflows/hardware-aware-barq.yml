@@ -27,9 +27,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      BARQ_BENCHMARK_SEEDS: "3"
-      BARQ_BENCHMARK_ITERS: "150"
-      BARQ_BENCHMARK_OPT_POINTS: "128"
+      BARQ_BENCHMARK_SEEDS: "5"
+      BARQ_BENCHMARK_ITERS: "10000"
+      BARQ_BENCHMARK_OPT_POINTS: "512"\n      BARQ_BENCHMARK_LEAKAGE_ITERS: "2500"\n      BARQ_BENCHMARK_LEAKAGE_WEIGHT: "0.5"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
