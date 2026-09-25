@@ -1,5 +1,9 @@
 name: BARQ 50-seed research benchmark
 
+concurrency:
+  group: barq-50seed-research-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches:
